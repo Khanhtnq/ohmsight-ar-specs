@@ -1,11 +1,13 @@
 import os
 import sys
+import shutil
 import subprocess
 import math
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-FFMPEG_PATH = r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin\ffmpeg.exe"
+# Dynamic resolution of ffmpeg binary with environment/PATH fallback
+FFMPEG_PATH = os.environ.get("FFMPEG_BIN") or shutil.which("ffmpeg") or "ffmpeg"
 OUT_VIDEO = os.path.abspath("assets/demo_specs_1080p.mp4")
 W, H = 1920, 1080
 FPS = 30
