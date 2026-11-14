@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OhmSight AR — Spatial Breadboard Nodal Solver for Snap Spectacles</title>
+  <style>
+    :root {
+      --bg-dark: #0a0c14;
+      --card-bg: rgba(16, 22, 38, 0.85);
+      --hud-border: rgba(0, 240, 255, 0.35);
+      --accent-cyan: #00f0ff;
+      --accent-green: #00ff9d;
+      --accent-yellow: #ffde00;
+      --accent-red: #ff3366;
+      --accent-purple: #b537f2;
+      --text-main: #f0f6fc;
+      --text-muted: #8b949e;
+      --font-mono: 'SF Mono', 'Fira Code', 'Roboto Mono', Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Waveguide Optical FOV Vignette */
+    .waveguide-frame {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      box-shadow: inset 0 0 100px rgba(0, 240, 255, 0.12), inset 0 0 30px rgba(0, 0, 0, 0.8);
+      border: 1px solid rgba(0, 240, 255, 0.2);
+      z-index: 50;
+    }
+
+    /* Top HUD Bar */
+    header.hud-header {
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      right: 20px;
+      height: 54px;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--hud-border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 60;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 18px;
+      color: #000;
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.6);
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #fff;
+    }
+
+    .specs-badge {
+      font-size: 11px;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(255, 222, 0, 0.15);
+      border: 1px solid var(--accent-yellow);
+      color: var(--accent-yellow);
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .telemetry-bar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .telemetry-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .telemetry-item span.label {
+      color: var(--text-muted);
+    }
+
+    .telemetry-item span.val {
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    /* Main Viewport */
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10;
+    }
+
+    canvas#arCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Floating AR Holographic Callout Card */
+    .ar-callout {
+      position: absolute;
+      top: 90px;
+      left: 30px;
+      width: 340px;
+      background: rgba(11, 19, 36, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 8px 32px rgba(0, 240, 255, 0.25);
+      z-index: 70;
+      transition: all 0.2s ease;
+    }
+
+    .callout-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .callout-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .probe-leads {
+      display: flex;
+      gap: 6px;
+    }
+
+    .lead-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #fff;
+    }
+
+    .lead-red { background: #ff2244; }
+    .lead-black { background: #333333; border: 1px solid #666; }
+
+    .callout-main-value {
+      font-family: var(--font-mono);
+      font-size: 36px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.1;
+      margin-bottom: 6px;
+      text-shadow: 0 0 14px rgba(0, 240, 255, 0.6);
+    }
+
+    .callout-sub-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sub-metric {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sub-metric-label {
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+
+    .sub-metric-value {
+      color: var(--accent-green);
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .formula-banner {
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: rgba(0, 240, 255, 0.08);
+      border-left: 3px solid var(--accent-cyan);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: #d1f4ff;
+      border-radius: 0 6px 6px 0;
+    }
+
+    /* Right Control Panel */
+    .control-panel {
+      position: absolute;
+      top: 90px;
+      right: 30px;
+      width: 320px;
+      background: rgba(11, 19, 36, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--hud-border);
+      border-radius: 14px;
+      padding: 18px;
+      z-index: 70;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+
+    .preset-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    button.btn-hud {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      color: var(--text-main);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: left;
+    }
+
+    button.btn-hud:hover, button.btn-hud.active {
+      background: rgba(0, 240, 255, 0.2);
+      border-color: var(--accent-cyan);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+    }
+
+    /* Probe Position Selectors */
+    .probe-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .probe-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    select.hud-select {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--hud-border);
+      color: #fff;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      outline: none;
+    }
+
+    /* Bottom SIK Pinch Gesture Bar */
+    .bottom-sik-bar {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 48px;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--hud-border);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 0 24px;
+      z-index: 60;
+    }
+
+    .sik-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pinch-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #555;
+      transition: all 0.2s ease;
+    }
+
+    .pinch-dot.pinched {
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
+      transform: scale(1.3);
+    }
+
+    /* Sound Toggle Button */
+    .sound-toggle {
+      background: none;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="waveguide-frame"></div>
+
+  <!-- HUD Top Bar -->
+  <header class="hud-header">
+    <div class="brand">
+      <div class="brand-icon">Ω</div>
+      <div class="brand-title">OhmSight AR</div>
+      <span class="specs-badge">Snap Spectacles SIK</span>
+    </div>
+
+    <div class="telemetry-bar">
+      <div class="telemetry-item">
+        <span class="label">MNA ITER:</span>
+        <span class="val" id="tele-iter">2</span>
+      </div>
+      <div class="telemetry-item">
+        <span class="label">SOLVE LATENCY:</span>
+        <span class="val" id="tele-latency">0.24 ms</span>
+      </div>
+      <div class="telemetry-item">
+        <span class="label">TOTAL POWER:</span>
+        <span class="val" id="tele-power">38.2 mW</span>
+      </div>
+      <div class="telemetry-item">
+        <span class="label">FPS:</span>
+        <span class="val" id="tele-fps">60</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Canvas Container -->
+  <div id="canvas-container">
+    <canvas id="arCanvas"></canvas>
+  </div>
+
+  <!-- Floating Holographic Probe Callout -->
+  <div class="ar-callout" id="arCallout">
+    <div class="callout-header">
+      <div class="callout-title">Spatial Multimeter Probes</div>
+      <div class="probe-leads">
+        <span class="lead-badge lead-red">RED [+]</span>
+        <span class="lead-badge lead-black">BLK [-]</span>
+      </div>
+    </div>
+    <div class="callout-main-value" id="disp-voltage">2.500 V</div>
+    <div class="callout-sub-metrics">
+      <div class="sub-metric">
+        <span class="sub-metric-label">V(RED LEAD)</span>
+        <span class="sub-metric-value" id="disp-vred">2.500 V</span>
+      </div>
+      <div class="sub-metric">
+        <span class="sub-metric-label">V(BLACK LEAD)</span>
+        <span class="sub-metric-value" id="disp-vblk">0.000 V</span>
+      </div>
+      <div class="sub-metric">
+        <span class="sub-metric-label">BRANCH CURRENT</span>
+        <span class="sub-metric-value" id="disp-current">0.250 mA</span>
+      </div>
+      <div class="sub-metric">
+        <span class="sub-metric-label">POWER IN BRANCH</span>
+        <span class="sub-metric-value" id="disp-pwr">0.625 mW</span>
+      </div>
+    </div>
+    <div class="formula-banner" id="disp-formula">
+      Divider: V_out = V_in * (R2 / (R1 + R2)) = 5.0V * (10k / 20k) = 2.50V
+    </div>
+  </div>
+
+  <!-- Right Control Panel -->
+  <div class="control-panel">
+    <div class="panel-section-title">Circuit Presets</div>
+    <div class="preset-buttons">
+      <button class="btn-hud active" onclick="loadPreset('divider')">1. Voltage Divider</button>
+      <button class="btn-hud" onclick="loadPreset('led')">2. LED Limiter</button>
+      <button class="btn-hud" onclick="loadPreset('bridge')">3. Wheatstone Bridge</button>
+      <button class="btn-hud" onclick="loadPreset('parallel')">4. Parallel R-Network</button>
+    </div>
+
+    <div class="panel-section-title">Interactive Pinch Probes</div>
+    <div class="probe-controls">
+      <div class="probe-row">
+        <span style="color: #ff3344; font-weight:700;">Red Probe (+)</span>
+        <select class="hud-select" id="sel-red-probe" onchange="onProbeSelect()">
+          <option value="+T">+T (VCC 5V)</option>
+          <option value="A1">Row 1 (A1)</option>
+          <option value="A10" selected>Row 10 (A10 Midpoint)</option>
+          <option value="A20">Row 20 (A20 LED)</option>
+          <option value="-T">-T (GND)</option>
+        </select>
+      </div>
+      <div class="probe-row">
+        <span style="color: #aaaaaa; font-weight:700;">Black Probe (-)</span>
+        <select class="hud-select" id="sel-blk-probe" onchange="onProbeSelect()">
+          <option value="-T" selected>-T (GND)</option>
+          <option value="+T">+T (VCC 5V)</option>
+          <option value="A1">Row 1 (A1)</option>
+          <option value="A10">Row 10 (A10 Midpoint)</option>
+          <option value="A20">Row 20 (A20 LED)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel-section-title">Spatial Visualizer</div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-size:12px; color:var(--text-muted);">Audio Multimeter</span>
+      <button class="sound-toggle" id="btn-sound" onclick="toggleAudio()">Sound: OFF</button>
+    </div>
+  </div>
+
+  <!-- Bottom SIK Gesture HUD -->
+  <div class="bottom-sik-bar">
+    <div class="sik-indicator">
+      <div class="pinch-dot" id="dot-left"></div>
+      <span>Left Pinch (GND Lead)</span>
+    </div>
+    <div style="width:1px; height:20px; background:rgba(255,255,255,0.15);"></div>
+    <div class="sik-indicator">
+      <div class="pinch-dot" id="dot-right"></div>
+      <span>Right Pinch (Probe Lead)</span>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // MNA SOLVER ENGINE (EMBEDDED FOR WEB SIMULATOR)
+    // ==========================================
+    class MNAEngine {
+      constructor(groundPin = '-T') {
+        this.groundPin = groundPin;
+        this.branches = [];
+        this.nodeMap = new Map();
+        this.reverseNodeMap = new Map();
+      }
+
+      setGround(pin) { this.groundPin = pin; }
+      addBranch(branch) { this.branches.push({ ...branch }); }
+      clear() {
+        this.branches = [];
+        this.nodeMap.clear();
+        this.reverseNodeMap.clear();
+      }
+
+      normalizePin(pin) {
+        const raw = pin.trim().toUpperCase();
+        if (['GND', 'GROUND', '-T', '-1', 'T_NEG'].includes(raw)) return 'RAIL_T_NEG';
+        if (['+T', '+1', 'VCC', 'T_POS', '+5V', '+9V'].includes(raw)) return 'RAIL_T_POS';
+        if (['-B', '-2', 'B_NEG'].includes(raw)) return 'RAIL_B_NEG';
+        if (['+B', '+2', 'B_POS'].includes(raw)) return 'RAIL_B_POS';
+
+        const match = raw.match(/^([A-J])(\d{1,2})$/);
+        if (match) {
+          const col = match[1];
+          const row = parseInt(match[2], 10);
+          return col >= 'A' && col <= 'E' ? `ROW_${row}_TOP` : `ROW_${row}_BOT`;
+        }
+        return raw;
+      }
+
+      buildNodeIndex() {
+        this.nodeMap.clear();
+        this.reverseNodeMap.clear();
+        const normalizedGnd = this.normalizePin(this.groundPin);
+        this.nodeMap.set(normalizedGnd, 0);
+        this.reverseNodeMap.set(0, normalizedGnd);
+
+        let nextIdx = 1;
+        for (const b of this.branches) {
+          const nPos = this.normalizePin(b.nodePos);
+          const nNeg = this.normalizePin(b.nodeNeg);
+          if (!this.nodeMap.has(nPos)) {
+            this.nodeMap.set(nPos, nextIdx);
+            this.reverseNodeMap.set(nextIdx, nPos);
+            nextIdx++;
+          }
+          if (!this.nodeMap.has(nNeg)) {
+            this.nodeMap.set(nNeg, nextIdx);
+            this.reverseNodeMap.set(nextIdx, nNeg);
+            nextIdx++;
+          }
+        }
+      }
+
+      solve(maxIterations = 30) {
+        this.buildNodeIndex();
+        const nonRefNodes = this.nodeMap.size - 1;
+        const vSources = this.branches.filter(b => b.type === 'VOLTAGE_SOURCE');
+        const m = vSources.length;
+        const matrixSize = nonRefNodes + m;
+
+        if (matrixSize <= 0) {
+          return {
+            converged: true,
+            nodeVoltages: new Map([[this.normalizePin(this.groundPin), 0]]),
+            branchCurrents: new Map(),
+            branchPowers: new Map()
+          };
+        }
+
+        const diodeStates = new Map();
+        for (const b of this.branches) {
+          if (b.type === 'DIODE' || b.type === 'LED') diodeStates.set(b.id, false);
+        }
+
+        let converged = false;
+        let iter = 0;
+        let nodeVoltages = new Map();
+        let branchCurrents = new Map();
+        let branchPowers = new Map();
+
+        while (iter < maxIterations && !converged) {
+          iter++;
+          const A = Array.from({ length: matrixSize }, () => Array(matrixSize).fill(0));
+          const z = Array(matrixSize).fill(0);
+          const n2m = n => n - 1;
+
+          for (const b of this.branches) {
+            const u = this.nodeMap.get(this.normalizePin(b.nodePos));
+            const v = this.nodeMap.get(this.normalizePin(b.nodeNeg));
+
+            if (b.type === 'RESISTOR' || b.type === 'WIRE') {
+              const r = b.type === 'WIRE' ? 1e-4 : Math.max(b.value, 1e-5);
+              const g = 1.0 / r;
+              if (u > 0) A[n2m(u)][n2m(u)] += g;
+              if (v > 0) A[n2m(v)][n2m(v)] += g;
+              if (u > 0 && v > 0) {
+                A[n2m(u)][n2m(v)] -= g;
+                A[n2m(v)][n2m(u)] -= g;
+              }
+            } else if (b.type === 'DIODE' || b.type === 'LED') {
+              const Vf = b.type === 'LED' ? (b.value || 1.8) : (b.value || 0.7);
+              const rf = 15.0;
+              const rrev = 1e6;
+              const isFwd = diodeStates.get(b.id);
+              const gd = isFwd ? (1.0 / rf) : (1.0 / rrev);
+              const Ieq = isFwd ? (-Vf / rf) : 0;
+
+              if (u > 0) A[n2m(u)][n2m(u)] += gd;
+              if (v > 0) A[n2m(v)][n2m(v)] += gd;
+              if (u > 0 && v > 0) {
+                A[n2m(u)][n2m(v)] -= gd;
+                A[n2m(v)][n2m(u)] -= gd;
+              }
+              if (u > 0) z[n2m(u)] -= Ieq;
+              if (v > 0) z[n2m(v)] += Ieq;
+            }
+          }
+
+          for (let k = 0; k < m; k++) {
+            const vb = vSources[k];
+            const u = this.nodeMap.get(this.normalizePin(vb.nodePos));
+            const v = this.nodeMap.get(this.normalizePin(vb.nodeNeg));
+            const sIdx = nonRefNodes + k;
+            if (u > 0) { A[n2m(u)][sIdx] += 1; A[sIdx][n2m(u)] += 1; }
+            if (v > 0) { A[n2m(v)][sIdx] -= 1; A[sIdx][n2m(v)] -= 1; }
+            z[sIdx] = vb.value;
+          }
+
+          const sol = this.solveGaussian(A, z);
+          const currentVoltages = new Map();
+          currentVoltages.set(this.normalizePin(this.groundPin), 0.0);
+
+          for (let n = 1; n <= nonRefNodes; n++) {
+            currentVoltages.set(this.reverseNodeMap.get(n), sol[n2m(n)]);
+          }
+
+          let stateChanged = false;
+          let hasDiodes = false;
+          for (const b of this.branches) {
+            if (b.type === 'DIODE' || b.type === 'LED') {
+              hasDiodes = true;
+              const vu = currentVoltages.get(this.normalizePin(b.nodePos)) || 0;
+              const vv = currentVoltages.get(this.normalizePin(b.nodeNeg)) || 0;
+              const vDrop = vu - vv;
+              const Vf = b.type === 'LED' ? (b.value || 1.8) : (b.value || 0.7);
+              const newState = vDrop >= Vf;
+              if (newState !== diodeStates.get(b.id)) {
+                diodeStates.set(b.id, newState);
+                stateChanged = true;
+              }
+            }
+          }
+
+          nodeVoltages = currentVoltages;
+          if (!hasDiodes || !stateChanged) converged = true;
+
+          for (let k = 0; k < m; k++) {
+            const vb = vSources[k];
+            const cur = sol[nonRefNodes + k];
+            branchCurrents.set(vb.id, cur);
+            branchPowers.set(vb.id, -cur * vb.value);
+          }
+
+          for (const b of this.branches) {
+            if (b.type === 'VOLTAGE_SOURCE') continue;
+            const vu = nodeVoltages.get(this.normalizePin(b.nodePos)) || 0;
+            const vv = nodeVoltages.get(this.normalizePin(b.nodeNeg)) || 0;
+            const vDrop = vu - vv;
+            if (b.type === 'RESISTOR' || b.type === 'WIRE') {
+              const r = b.type === 'WIRE' ? 1e-4 : Math.max(b.value, 1e-5);
+              const cur = vDrop / r;
+              branchCurrents.set(b.id, cur);
+              branchPowers.set(b.id, cur * vDrop);
+            } else if (b.type === 'DIODE' || b.type === 'LED') {
+              const Vf = b.type === 'LED' ? (b.value || 1.8) : (b.value || 0.7);
+              const cur = vDrop >= Vf ? (vDrop - Vf) / 15.0 : vDrop / 1e6;
+              branchCurrents.set(b.id, cur);
+              branchPowers.set(b.id, cur * vDrop);
+            }
+          }
+        }
+
+        return { converged, iterations: iter, nodeVoltages, branchCurrents, branchPowers };
+      }
+
+      solveGaussian(A, b) {
+        const n = b.length;
+        const M = Array.from({ length: n }, (_, i) => [...A[i], b[i]]);
+        for (let p = 0; p < n; p++) {
+          let maxRow = p;
+          let maxVal = Math.abs(M[p][p]);
+          for (let r = p + 1; r < n; r++) {
+            if (Math.abs(M[r][p]) > maxVal) { maxVal = Math.abs(M[r][p]); maxRow = r; }
+          }
+          if (maxVal < 1e-12) { M[p][p] += 1e-9; }
+          else if (maxRow !== p) { const tmp = M[p]; M[p] = M[maxRow]; M[maxRow] = tmp; }
+
+          for (let r = p + 1; r < n; r++) {
+            const factor = M[r][p] / M[p][p];
+            if (Math.abs(factor) > 1e-15) {
+              for (let c = p; c <= n; c++) M[r][c] -= factor * M[p][c];
+            }
+          }
+        }
+        const x = Array(n).fill(0);
+        for (let r = n - 1; r >= 0; r--) {
+          let sum = M[r][n];
+          for (let c = r + 1; c < n; c++) sum -= M[r][c] * x[c];
+          x[r] = sum / (Math.abs(M[r][r]) < 1e-12 ? 1e-9 : M[r][r]);
+        }
+        return x;
+      }
+    }
+
+    // ==========================================
+    // 3D SPATIAL CANVAS & CIRCUIT STATE
+    // ==========================================
+    const canvas = document.getElementById('arCanvas');
+    const ctx = canvas.getContext('2d');
+    const solver = new MNAEngine('-T');
+
+    let currentPreset = 'divider';
+    let redProbePin = 'A10';
+    let blkProbePin = '-T';
+    let audioCtx = null;
+    let osc = null;
+    let audioEnabled = false;
+
+    // Electron flow particle animation
+    const particles = [];
+    for (let i = 0; i < 40; i++) {
+      particles.push({ t: Math.random(), speed: 0.005 + Math.random() * 0.005 });
+    }
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Circuit Presets
+    function loadPreset(name) {
+      currentPreset = name;
+      document.querySelectorAll('.btn-hud').forEach(b => b.classList.remove('active'));
+      const activeBtn = Array.from(document.querySelectorAll('.btn-hud')).find(b => b.textContent.toLowerCase().includes(name));
+      if (activeBtn) activeBtn.classList.add('active');
+
+      solver.clear();
+
+      if (name === 'divider') {
+        solver.addBranch({ id: 'V1', type: 'VOLTAGE_SOURCE', nodePos: '+T', nodeNeg: '-T', value: 5.0 });
+        solver.addBranch({ id: 'WIRE_IN', type: 'WIRE', nodePos: '+T', nodeNeg: 'A1', value: 0.0001 });
+        solver.addBranch({ id: 'R1', type: 'RESISTOR', nodePos: 'A1', nodeNeg: 'A10', value: 10000 });
+        solver.addBranch({ id: 'R2', type: 'RESISTOR', nodePos: 'A10', nodeNeg: '-T', value: 10000 });
+        redProbePin = 'A10';
+        blkProbePin = '-T';
+        document.getElementById('disp-formula').textContent = 'Divider: V_out = V_in * (R2 / (R1 + R2)) = 5.0V * (10k / 20k) = 2.500 V';
+      } else if (name === 'led') {
+        solver.addBranch({ id: 'V1', type: 'VOLTAGE_SOURCE', nodePos: '+T', nodeNeg: '-T', value: 5.0 });
+        solver.addBranch({ id: 'WIRE_IN', type: 'WIRE', nodePos: '+T', nodeNeg: 'A1', value: 0.0001 });
+        solver.addBranch({ id: 'R_LIMIT', type: 'RESISTOR', nodePos: 'A1', nodeNeg: 'A20', value: 220 });
+        solver.addBranch({ id: 'LED1', type: 'LED', nodePos: 'A20', nodeNeg: '-T', value: 1.8 });
+        redProbePin = 'A20';
+        blkProbePin = '-T';
+        document.getElementById('disp-formula').textContent = 'LED Branch: V_f = 1.80V, I = (5.0V - 1.80V) / 220Ω = 14.5 mA (Safe Current!)';
+      } else if (name === 'bridge') {
+        solver.addBranch({ id: 'V1', type: 'VOLTAGE_SOURCE', nodePos: '+T', nodeNeg: '-T', value: 10.0 });
+        solver.addBranch({ id: 'R1', type: 'RESISTOR', nodePos: '+T', nodeNeg: 'A10', value: 1000 });
+        solver.addBranch({ id: 'R2', type: 'RESISTOR', nodePos: 'A10', nodeNeg: '-T', value: 2000 });
+        solver.addBranch({ id: 'R3', type: 'RESISTOR', nodePos: '+T', nodeNeg: 'F10', value: 2000 });
+        solver.addBranch({ id: 'R4', type: 'RESISTOR', nodePos: 'F10', nodeNeg: '-T', value: 4000 });
+        solver.addBranch({ id: 'R_METER', type: 'RESISTOR', nodePos: 'A10', nodeNeg: 'F10', value: 1000 });
+        redProbePin = 'A10';
+        blkProbePin = 'F10';
+        document.getElementById('disp-formula').textContent = 'Wheatstone Bridge Balanced Null: R1/R2 = R3/R4 (1/2 = 2/4) => ΔV = 0.000 V';
+      } else if (name === 'parallel') {
+        solver.addBranch({ id: 'V1', type: 'VOLTAGE_SOURCE', nodePos: '+T', nodeNeg: '-T', value: 5.0 });
+        solver.addBranch({ id: 'R1', type: 'RESISTOR', nodePos: '+T', nodeNeg: '-T', value: 1000 });
+        solver.addBranch({ id: 'R2', type: 'RESISTOR', nodePos: '+T', nodeNeg: '-T', value: 1000 });
+        redProbePin = '+T';
+        blkProbePin = '-T';
+        document.getElementById('disp-formula').textContent = 'Parallel: R_eq = (R1 * R2) / (R1 + R2) = 500Ω. I_total = 10.0 mA.';
+      }
+
+      document.getElementById('sel-red-probe').value = redProbePin;
+      document.getElementById('sel-blk-probe').value = blkProbePin;
+    }
+
+    function onProbeSelect() {
+      redProbePin = document.getElementById('sel-red-probe').value;
+      blkProbePin = document.getElementById('sel-blk-probe').value;
+    }
+
+    function toggleAudio() {
+      audioEnabled = !audioEnabled;
+      const btn = document.getElementById('btn-sound');
+      if (audioEnabled) {
+        btn.textContent = 'Sound: ON';
+        btn.style.borderColor = 'var(--accent-green)';
+        btn.style.color = 'var(--accent-green)';
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          gain.gain.value = 0.08;
+          osc.type = 'sine';
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+        }
+      } else {
+        btn.textContent = 'Sound: OFF';
+        btn.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+        btn.style.color = '#fff';
+        if (osc) {
+          osc.stop();
+          osc.disconnect();
+          osc = null;
+          audioCtx = null;
+        }
+      }
+    }
+
+    // Main Render Loop
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fps = 60;
+
+    function render(time) {
+      const dt = (time - lastTime) / 1000;
+      frameCount++;
+      if (frameCount % 30 === 0) {
+        fps = Math.round(1 / dt);
+        document.getElementById('tele-fps').textContent = fps;
+      }
+      lastTime = time;
+
+      // Solve Circuit
+      const t0 = performance.now();
+      const res = solver.solve();
+      const tSolve = (performance.now() - t0).toFixed(2);
+
+      // Extract telemetry
+      document.getElementById('tele-latency').textContent = `${tSolve} ms`;
+      document.getElementById('tele-iter').textContent = res.iterations;
+
+      const normRed = solver.normalizePin(redProbePin);
+      const normBlk = solver.normalizePin(blkProbePin);
+      const vRed = res.nodeVoltages.get(normRed) || 0;
+      const vBlk = res.nodeVoltages.get(normBlk) || 0;
+      const vDiff = vRed - vBlk;
+
+      // Update HUD Values
+      document.getElementById('disp-voltage').textContent = `${vDiff.toFixed(3)} V`;
+      document.getElementById('disp-vred').textContent = `${vRed.toFixed(3)} V`;
+      document.getElementById('disp-vblk').textContent = `${vBlk.toFixed(3)} V`;
+
+      let cur = 0;
+      for (const [_, c] of res.branchCurrents) {
+        if (Math.abs(c) > cur) cur = Math.abs(c);
+      }
+      document.getElementById('disp-current').textContent = `${(cur * 1000).toFixed(2)} mA`;
+
+      let totalPwr = 0;
+      for (const [_, p] of res.branchPowers) {
+        if (p > 0) totalPwr += p;
+      }
+      document.getElementById('disp-pwr').textContent = `${(totalPwr * 1000).toFixed(2)} mW`;
+      document.getElementById('tele-power').textContent = `${(totalPwr * 1000).toFixed(1)} mW`;
+
+      // Audio Pitch update
+      if (audioEnabled && osc) {
+        const pitch = Math.max(120, Math.min(1800, 300 + Math.abs(vDiff) * 120));
+        osc.frequency.setTargetAtTime(pitch, audioCtx.currentTime, 0.05);
+      }
+
+      // Draw Spatial Hologram on Canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Holographic Grid Background
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.06)';
+      ctx.lineWidth = 1;
+      const gridStep = 40;
+      for (let x = 0; x < canvas.width; x += gridStep) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += gridStep) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Draw Breadboard in 3D Isometric View
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2 + 30;
+      const boardW = 680;
+      const boardH = 260;
+
+      // Breadboard Base Shadow & Glow
+      ctx.shadowColor = 'rgba(0, 240, 255, 0.35)';
+      ctx.shadowBlur = 25;
+      ctx.fillStyle = '#181e2e';
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(cx - boardW / 2, cy - boardH / 2, boardW, boardH, 16);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Power Rails (Top & Bottom)
+      // Top Rails (+ / -)
+      ctx.strokeStyle = '#ff3344';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - boardW / 2 + 30, cy - boardH / 2 + 25);
+      ctx.lineTo(cx + boardW / 2 - 30, cy - boardH / 2 + 25);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#00aaff';
+      ctx.beginPath();
+      ctx.moveTo(cx - boardW / 2 + 30, cy - boardH / 2 + 45);
+      ctx.lineTo(cx + boardW / 2 - 30, cy - boardH / 2 + 45);
+      ctx.stroke();
+
+      // Center DIP Trough
+      ctx.fillStyle = '#0f1422';
+      ctx.fillRect(cx - boardW / 2 + 20, cy - 10, boardW - 40, 20);
+
+      // Draw Breadboard Pin Holes (30 columns)
+      const numCols = 30;
+      const colSpacing = (boardW - 80) / numCols;
+      const startX = cx - boardW / 2 + 45;
+
+      for (let col = 1; col <= numCols; col++) {
+        const px = startX + (col - 1) * colSpacing;
+
+        // Row label
+        if (col === 1 || col % 5 === 0) {
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.font = '10px var(--font-mono)';
+          ctx.textAlign = 'center';
+          ctx.fillText(col, px, cy - 14);
+        }
+
+        // Top terminal pins (A-E)
+        for (let r = 0; r < 5; r++) {
+          const py = cy - 75 + r * 11;
+          ctx.fillStyle = '#090d16';
+          ctx.beginPath();
+          ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Bottom terminal pins (F-J)
+        for (let r = 0; r < 5; r++) {
+          const py = cy + 20 + r * 11;
+          ctx.fillStyle = '#090d16';
+          ctx.beginPath();
+          ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Draw Installed Components based on preset
+      if (currentPreset === 'divider') {
+        // Wire from +T to Row 1
+        drawWire(cx - boardW / 2 + 50, cy - boardH / 2 + 25, startX, cy - 75, '#ff3344');
+        // R1: Row 1 to Row 10
+        drawResistor(startX, cy - 53, startX + 9 * colSpacing, cy - 53, '10kΩ', '#d4a373');
+        // R2: Row 10 to Ground Rail
+        drawResistor(startX + 9 * colSpacing, cy - 31, cx + 50, cy - boardH / 2 + 45, '10kΩ', '#d4a373');
+      } else if (currentPreset === 'led') {
+        // Wire to Row 1
+        drawWire(cx - boardW / 2 + 50, cy - boardH / 2 + 25, startX, cy - 75, '#ff3344');
+        // Current limiting resistor 220 Ohm (Row 1 to Row 20)
+        drawResistor(startX, cy - 53, startX + 19 * colSpacing, cy - 53, '220Ω', '#e76f51');
+        // LED from Row 20 to Ground
+        drawLED(startX + 19 * colSpacing, cy - 31, cx + 80, cy - boardH / 2 + 45, true);
+      }
+
+      // Draw Multimeter Probes & Snap Beziers
+      const redX = getPinScreenX(redProbePin, startX, colSpacing, cx, boardW);
+      const redY = getPinScreenY(redProbePin, cy, boardH);
+      const blkX = getPinScreenX(blkProbePin, startX, colSpacing, cx, boardW);
+      const blkY = getPinScreenY(blkProbePin, cy, boardH);
+
+      drawProbeLead(redX, redY, '#ff2244', 'RED [+]');
+      drawProbeLead(blkX, blkY, '#444444', 'BLK [-]');
+
+      // Electron Flow Particles along active path
+      updateAndDrawParticles(startX, cy - 53, startX + 9 * colSpacing, cy - 53);
+
+      requestAnimationFrame(render);
+    }
+
+    function getPinScreenX(pin, startX, colSpacing, cx, boardW) {
+      if (pin === '+T' || pin === '-T') return cx - 80;
+      const m = pin.match(/\d+/);
+      if (m) {
+        const row = parseInt(m[0], 10);
+        return startX + (row - 1) * colSpacing;
+      }
+      return cx;
+    }
+
+    function getPinScreenY(pin, cy, boardH) {
+      if (pin === '+T') return cy - boardH / 2 + 25;
+      if (pin === '-T') return cy - boardH / 2 + 45;
+      return cy - 53;
+    }
+
+    function drawWire(x1, y1, x2, y2, color) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      const mx = (x1 + x2) / 2;
+      const my = Math.min(y1, y2) - 30;
+      ctx.quadraticCurveTo(mx, my, x2, y2);
+      ctx.stroke();
+    }
+
+    function drawResistor(x1, y1, x2, y2, label, bodyColor) {
+      drawWire(x1, y1, x2, y2, bodyColor);
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2 - 15;
+      ctx.fillStyle = '#2b2d42';
+      ctx.strokeStyle = 'var(--accent-yellow)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(mx - 24, my - 10, 48, 20, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px var(--font-mono)';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, mx, my + 4);
+    }
+
+    function drawLED(x1, y1, x2, y2, illuminated) {
+      drawWire(x1, y1, x2, y2, '#ff3366');
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2 - 15;
+
+      if (illuminated) {
+        ctx.shadowColor = '#ff2255';
+        ctx.shadowBlur = 30;
+      }
+      ctx.fillStyle = illuminated ? '#ff2255' : '#661122';
+      ctx.beginPath();
+      ctx.arc(mx, my, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '9px var(--font-mono)';
+      ctx.textAlign = 'center';
+      ctx.fillText('LED', mx, my + 3);
+    }
+
+    function drawProbeLead(x, y, color, tag) {
+      // Glow circle on probed pin
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Probe Pin needle
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 15, y - 45);
+      ctx.stroke();
+
+      // Floating tag badge
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.roundRect(x - 22, y - 68, 44, 18, 4);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px var(--font-mono)';
+      ctx.textAlign = 'center';
+      ctx.fillText(tag, x, y - 56);
+    }
+
+    function updateAndDrawParticles(x1, y1, x2, y2) {
+      ctx.fillStyle = '#00f0ff';
+      for (const p of particles) {
+        p.t += p.speed;
+        if (p.t > 1) p.t = 0;
+        const px = x1 + (x2 - x1) * p.t;
+        const py = y1 + (y2 - y1) * p.t;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Initialize Default Preset
+    loadPreset('divider');
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>

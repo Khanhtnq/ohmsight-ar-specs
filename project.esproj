@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "engineVersion": "5.4.0",
+    "projectVersion": "2.0.0",
+    "targetPlatform": "Spectacles",
+    "lensName": "OhmSight AR: Spatial Breadboard Nodal Solver & Pinch-Interactive Circuit Tutor",
+    "lensStudioVersion": "5.4.0.24101500",
+    "appId": "com.ohmsight.spectacles.tutor",
+    "author": "Khanhtnq",
+    "deviceSupport": [
+      "Spectacles2024",
+      "SpectaclesNextGen"
+    ],
+    "capabilities": [
+      "HandTracking",
+      "WorldMesh",
+      "SpatialAudio",
+      "SpectaclesInteractionKit"
+    ]
+  },
+  "scene": {
+    "rootObject": {
+      "name": "OhmSight_WorldRoot",
+      "enabled": true,
+      "children": [
+        {
+          "name": "SpectaclesCamera",
+          "components": [
+            { "type": "Camera", "fov": 45, "near": 0.05, "far": 100.0 }
+          ]
+        },
+        {
+          "name": "SIK_Manager",
+          "components": [
+            { "type": "ScriptComponent", "script": "Assets/Scripts/PinchProbeController.ts" }
+          ]
+        },
+        {
+          "name": "Breadboard_Assembly",
+          "transform": {
+            "position": [0.0, -0.15, -0.45],
+            "rotation": [0.25, 0.0, 0.0, 0.968],
+            "scale": [1.0, 1.0, 1.0]
+          },
+          "components": [
+            { "type": "ScriptComponent", "script": "Assets/Scripts/BreadboardNodalSolver.ts" },
+            { "type": "ScriptComponent", "script": "Assets/Scripts/SpatialCalloutRenderer.ts" }
+          ]
+        },
+        {
+          "name": "Holographic_Callout_HUD",
+          "transform": {
+            "position": [0.0, 0.12, -0.42],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0]
+          }
+        }
+      ]
+    }
+  },
+  "assets": [
+    { "path": "Assets/Scripts/MNAEngine.ts", "type": "TypeScript" },
+    { "path": "Assets/Scripts/BreadboardNodalSolver.ts", "type": "TypeScriptComponent" },
+    { "path": "Assets/Scripts/PinchProbeController.ts", "type": "TypeScriptComponent" },
+    { "path": "Assets/Scripts/SpatialCalloutRenderer.ts", "type": "TypeScriptComponent" }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "ohmsight-ar-specs",
+  "version": "1.0.0",
+  "description": "OhmSight AR: Spatial Breadboard Nodal Solver & Pinch-Interactive Circuit Tutor for Snap Spectacles",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/test_mna_solver.mjs"
+  },
+  "keywords": [
+    "snap-spectacles",
+    "lens-studio",
+    "augmented-reality",
+    "mna-solver",
+    "circuit-simulation",
+    "sik",
+    "breadboard"
+  ],
+  "author": "Khanhtnq <218711032+Khanhtnq@users.noreply.github.com>",
+  "license": "MIT"
+}
